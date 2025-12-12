@@ -1,0 +1,118 @@
+"""
+Step 07: SNP Calling
+BWA alignment -> FreeBayes variant calling -> Quality filtering
+Run independently: snakemake --use-conda --cores 8 -s rules/07_snp_analysis.smk
+"""
+
+import pandas as pd
+
+configfile: "config/config.yaml"
+
+rule download_reference:
+    output:
+        config["reference"]["fasta"]
+    params:
+        url=config["reference"]["url"]
+    conda:
+        "../envs/snp_analysis.yaml"
+    log:
+        "logs/07_snp_analysis/download_reference.log"
+    shell:
+        """
+        wget -O {output}.gz {params.url} 2> {log}
+        gunzip {output}.gz
+        """
+
+rule index_reference:
+    input:
+        config["reference"]["fasta"]
+    output:
+        config["reference"]["fasta"] + ".bwt",
+        config["reference"]["fasta"] + ".fai"
+    conda:
+        "../envs/snp_analysis.yaml"
+    log:
+        "logs/07_snp_analysis/index_reference.log"
+    shell:
+        """
+        bwa index {input} 2> {log}
+        samtools faidx {input} 2>> {log}
+        """
+
+rule bwa_align:
+    input:
+        ref=config["reference"]["fasta"],
+        ref_idx=config["reference"]["fasta"] + ".bwt",
+        r1="data/processed/{sample}_1.fastq.gz",
+        r2="data/processed/{sample}_2.fastq.gz"
+    output:
+        bam=temp("results/snp/bam/{sample}.sorted.bam"),
+        bai=temp("results/snp/bam/{sample}.sorted.bam.bai")
+    conda:
+        "../envs/snp_analysis.yaml"
+    threads: 4
+    log:
+        "logs/07_snp_analysis/bwa_{sample}.log"
+    shell:
+        """
+        bwa mem -t {threads} {input.ref} {input.r1} {input.r2} 2> {log} | \
+        samtools sort -@ {threads} -o {output.bam} - 2>> {log}
+        samtools index {output.bam} 2>> {log}
+        """
+
+rule freebayes_call:
+    input:
+        ref=config["reference"]["fasta"],
+        ref_fai=config["reference"]["fasta"] + ".fai",
+        bam="results/snp/bam/{sample}.sorted.bam",
+        bai="results/snp/bam/{sample}.sorted.bam.bai"
+    output:
+        vcf=temp("results/snp/vcf/{sample}.raw.vcf")
+    conda:
+        "../envs/snp_analysis.yaml"
+    log:
+        "logs/07_snp_analysis/freebayes_{sample}.log"
+    shell:
+        """
+        freebayes -f {input.ref} {input.bam} > {output.vcf} 2> {log}
+        """
+
+rule filter_vcf:
+    input:
+        vcf="results/snp/vcf/{sample}.raw.vcf"
+    output:
+        vcf="results/snp/vcf/{sample}.filtered.vcf"
+    params:
+        min_qual=config["snp"]["min_qual"],
+        min_depth=config["snp"]["min_depth"]
+    conda:
+        "../envs/snp_analysis.yaml"
+    log:
+        "logs/07_snp_analysis/filter_{sample}.log"
+    shell:
+        """
+        bcftools filter -i 'QUAL>={params.min_qual} && INFO/DP>={params.min_depth}' \
+            {input.vcf} -o {output.vcf} 2> {log}
+        """
+
+def get_all_filtered_vcfs(wildcards):
+    train_df = pd.read_csv("results/features/metadata_train_processed.csv")
+    test_df = pd.read_csv("results/features/metadata_test_processed.csv")
+    samples = list(train_df["Run"]) + list(test_df["Run"])
+    return expand("results/snp/vcf/{sample}.filtered.vcf", sample=samples)
+
+rule combine_snps:
+    input:
+        get_all_filtered_vcfs
+    output:
+        "results/snp/combined_snps.csv"
+    conda:
+        "../envs/snp_analysis.yaml"
+    log:
+        "logs/07_snp_analysis/combine_snps.log"
+    script:
+        "../scripts/07_run_snp_analysis.py"
+
+rule snp_analysis_all:
+    input:
+        "results/snp/combined_snps.csv"

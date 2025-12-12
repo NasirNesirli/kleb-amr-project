@@ -1,0 +1,366 @@
+# =============================================================================
+# AMR K. pneumoniae Prediction Pipeline - .gitignore
+# Containerized Bioinformatics/ML Project
+# =============================================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.pyc
+*.pyo
+*.pyd
+
+# --- Docker & Containerization ---
+# Docker build cache and temporary files
+.docker/
+docker-compose.override.yml
+docker-compose.local.yml
+.dockerignore.local
+
+# Container volumes and mounts
+/data/docker-volumes/
+/results/docker-volumes/
+/logs/docker-volumes/
+
+# Container-generated files
+.container_id
+container.log
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+*.ipynb
+
+# --- Virtual Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+conda-meta/
+
+# --- IDEs and Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Google Cloud Platform ---
+# Service account keys and credentials
+*.json.key
+service-account.json
+gcp-credentials.json
+.gcp/
+.google/
+
+# Terraform state (if used)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# GCP deployment configs (keep templates)
+gcp-config.local.yaml
+deployment-config.local.yaml
+
+# Cloud Build logs
+cloudbuild-logs/
+
+# --- Snakemake ---
+.snakemake/
+.snakemake
+logs/
+benchmarks/
+slurm-*.out
+
+# Snakemake profiles (keep examples)
+profiles/*/config.yaml.local
+
+# --- Conda/Mamba Environments ---
+.conda/
+.mamba/
+envs/*/
+**/envs/*/
+
+# --- Large Data Files ---
+# Based on analysis: current dataset ~109GB, full dataset ~1.1-1.3TB
+# These files are too large for Git and should be stored in GCS/S3
+
+# Raw sequencing data (largest files: ~86GB for 120 samples)
+data/raw/
+data/processed/*.fastq.gz
+data/processed/*.fq.gz
+data/processed/*.fastq
+data/processed/*.fq
+data/processed/*.sra
+data/processed/*.bam
+data/processed/*.sam
+data/processed/*.vcf.gz
+data/processed/*.vcf
+
+# Assembly files (moderate size: ~652MB for 120 samples)
+data/assemblies/*.fasta
+data/assemblies/*.fa
+data/assemblies/*.fna
+data/assemblies/*.gfa
+
+# Large intermediate files
+data/intermediate/
+data/temp/
+data/cache/
+
+# Reference genomes and databases
+data/reference/*.fasta
+data/reference/*.fa
+data/reference/*.fna
+data/reference/*.gz
+data/reference/kraken2_db/
+data/reference/*.amb
+data/reference/*.ann
+data/reference/*.bwt
+data/reference/*.pac
+data/reference/*.sa
+
+# Quality control outputs
+results/qc/*.html
+results/qc/*.zip
+results/qc/*_fastqc/
+results/qc/multiqc_data/
+
+# AMR analysis results (can be large with many samples)
+results/amr/
+
+# SNP analysis results (VCF files can be large)
+results/snp/
+
+# --- Machine Learning Models ---
+# Trained model files (can be large, especially DNABERT models)
+results/models/**/*.pkl
+results/models/**/*.joblib
+results/models/**/*.h5
+results/models/**/*.pt
+results/models/**/*.pth
+results/models/**/*.ckpt
+results/models/**/*.safetensors
+results/models/**/*.bin
+
+# Model checkpoints and weights
+checkpoints/
+saved_models/
+*.ckpt
+*.pt
+*.pth
+model_weights/
+best_model/
+
+# Feature matrices (can be large with 1000+ samples)
+results/features/**/*.npz
+results/features/**/*.npy
+results/features/**/*.pkl
+results/features/**/train_final.*
+results/features/**/test_final.*
+
+# DNABERT and transformer caches
+results/features/deep_models/*/tokenizer.pkl
+results/features/deep_models/*/*.npz
+
+# Temporary model outputs
+*.tmp
+temp/
+tmp/
+
+# --- HuggingFace Cache ---
+.cache/huggingface/
+transformers_cache/
+.transformers_cache/
+
+# --- Logs and Outputs ---
+logs/**/*.log
+logs/**/*.out
+logs/**/*.err
+*.log
+*.out
+*.err
+
+# Slurm outputs
+slurm-*.out
+slurm-*.err
+
+# --- Results and Outputs ---
+# Keep structure but ignore large result files
+results/**/*.pdf
+results/**/*.png
+results/**/*.svg
+results/**/*.eps
+
+# Temporary analysis files
+scratch/
+temp_analysis/
+debug_output/
+
+# --- Configuration Secrets ---
+# Keep config.yaml but ignore any secrets
+config/secrets.yaml
+config/local.yaml
+.env.local
+.secrets
+
+# --- Package Management ---
+# Conda
+environment.yml.lock
+conda-lock.yml
+*.conda
+
+# Pip
+requirements.txt.lock
+poetry.lock
+
+# --- Backup Files ---
+*.bak
+*.backup
+*.orig
+*~
+
+# --- Operating System ---
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Miscellaneous ---
+.coverage
+.pytest_cache/
+.tox/
+.nox/
+htmlcov/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Profiling
+.prof
+
+# Documentation builds
+docs/_build/
+docs/build/
+site/
+
+# --- KEEP Important Files ---
+# Configuration files
+!config/config.yaml
+!envs/*.yaml
+!docker-compose.yml
+!Dockerfile
+!.dockerignore
+
+# Docker and deployment scripts
+!scripts/docker/
+!scripts/gcp/
+!Makefile
+
+# Small reference files
+!data/reference/genome_size.txt
+!data/reference/reference_genome
+!data/reference/*.fai
+
+# Documentation
+!README.md
+!docs/*.md
+!*.md
+!CITATION.cff
+
+# Scripts and workflows
+!scripts/
+!rules/
+!utils/
+!Snakefile
+
+# Small result summaries (JSON/CSV only, no large binary files)
+!results/**/*.json
+!results/**/*.tsv
+!results/**/*.txt
+
+# Keep small CSV files but exclude large feature matrices
+!results/**/*.csv
+results/features/*_train.csv
+results/features/*_test.csv
+results/features/deep_models/**/*.csv
+
+# Small example/test data only
+!data/metadata.csv
+
+# Cloud deployment configs (templates only, no secrets)
+!scripts/gcp/cloudbuild.yaml
+!scripts/gcp/*.sh
+
+# Keep plots if they're small
+!results/**/plots_complete.txt
+results/**/plots/*.png
+results/**/plots/*.pdf
+!results/**/plots/*.png.small
+!results/**/plots/*.pdf.small
+
+# =============================================================================
+# DATA MANAGEMENT NOTES
+# =============================================================================
+# Current dataset: ~109GB (120 samples)
+# Full dataset projection: ~1.1-1.3TB (1000+ samples)
+# 
+# Recommended data storage strategy:
+# 1. Git: Code, configs, small results (<100MB total)
+# 2. Google Cloud Storage: Large datasets (Nearline/Archive storage)
+# 3. Local/Compute: Active processing data (SSD storage)
+# 
+# For containerized deployments:
+# - Mount data volumes instead of copying into container
+# - Use tiered storage (hot/warm/cold) for cost optimization
+# - Consider data compression for archived results
+# =============================================================================

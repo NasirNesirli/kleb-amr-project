@@ -1,0 +1,117 @@
+# Docker ignore file for AMR K. pneumoniae pipeline
+# Exclude unnecessary files to reduce build context size
+
+# Version control
+.git/
+.gitignore
+.github/
+
+# Documentation (will be added back selectively)
+*.md
+docs/
+*.pdf
+
+# Results and data (should be mounted as volumes)
+results/
+data/processed/
+data/assemblies/
+logs/
+
+# Python cache and temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Conda environments (will be recreated in container)
+.conda/
+.snakemake/
+
+# Large data files that should be mounted
+*.fastq
+*.fastq.gz
+*.fasta
+*.fa
+*.sam
+*.bam
+*.vcf
+*.gff
+*.gtf
+
+# Model files (large, should be mounted or downloaded)
+*.pt
+*.pth
+*.pkl
+*.joblib
+*.h5
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Logs
+*.log
+
+# Specific to this project - keep essential files
+!README.md
+!envs/
+!config/
+!scripts/
+!rules/
+!utils/
+!Snakefile
+!CITATION.cff
+
+# Reference data (will be downloaded or mounted)
+data/reference/
+
+# Backup files
+*.backup
+*.bak

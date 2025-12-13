@@ -7,7 +7,6 @@ Creates train (pre-2023) and test (2023-24) splits.
 import pandas as pd
 import re
 import sys
-import subprocess
 from pathlib import Path
 
 def parse_ast_phenotypes(ast_string, target_drugs):
@@ -32,32 +31,6 @@ def parse_ast_phenotypes(ast_string, target_drugs):
             results[drug] = None
     return results
 
-def check_library_layout(run_id):
-    """Check if sample is paired-end by querying SRA database."""
-    try:
-        # Use esearch and efetch to get library layout from SRA
-        cmd = f"esearch -db sra -query '{run_id}' | efetch -format runinfo | cut -d',' -f16"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-        
-        if result.returncode == 0:
-            layout = result.stdout.strip().split('\n')[-1]  # Get last line (skip header)
-            if layout.upper() == 'PAIRED':
-                return 'paired'
-            elif layout.upper() == 'SINGLE':
-                return 'single'
-        
-        # Fallback: try sra-stat if available
-        cmd2 = f"sra-stat --quick {run_id} 2>/dev/null | grep 'layout:' || echo 'unknown'"
-        result2 = subprocess.run(cmd2, shell=True, capture_output=True, text=True, timeout=30)
-        if 'paired' in result2.stdout.lower():
-            return 'paired'
-        elif 'single' in result2.stdout.lower():
-            return 'single'
-            
-    except Exception as e:
-        print(f"Warning: Could not check layout for {run_id}: {e}")
-    
-    return 'unknown'
 
 def main():
     # Load parameters from snakemake
@@ -99,33 +72,7 @@ def main():
     # Filter samples with at least one valid phenotype
     df = df.dropna(subset=antibiotics, how='all')
     
-    # Check library layout for all samples
-    print("Checking library layout for all samples...")
-    paired_samples = []
-    single_samples = []
-    unknown_samples = []
-    
-    for _, row in df.iterrows():
-        run_id = row['Run']
-        layout = check_library_layout(run_id)
-        print(f"{run_id}: {layout}")
-        
-        if layout == 'paired':
-            paired_samples.append(run_id)
-        elif layout == 'single':
-            single_samples.append(run_id)
-        else:
-            unknown_samples.append(run_id)
-    
-    print(f"\nLibrary layout summary:")
-    print(f"Paired-end samples: {len(paired_samples)}")
-    print(f"Single-end samples: {len(single_samples)}")
-    print(f"Unknown layout: {len(unknown_samples)}")
-    
-    if single_samples:
-        print(f"Excluding single-end and unknown samples: {single_samples} , {unknown_samples}")
-        df = df[df['Run'].isin(paired_samples)]
-        print(f"Samples after filtering: {len(df)}")
+    print(f"Samples after filtering for valid phenotypes: {len(df)}")
     
     # Split by year
     train_df = df[df['Year'] <= train_cutoff].copy()

@@ -88,10 +88,10 @@ models:
     epochs: 50
     batch_size: 16
 
-# --- Resource Allocation (Mac M3 Pro defaults) ---
+# --- Resource Allocation ---
 resources:
-  threads: 8
-  memory_gb: 16
+  threads: 16
+  memory_gb: 64
   
 # --- Paths ---
 paths:

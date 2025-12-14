@@ -1,8 +1,10 @@
 """
-Step 18: Cross-Model Interpretability Analysis
+Step 19: Cross-Model Interpretability Analysis
 Compares feature importance across all models and identifies consensus features
-Run independently: snakemake --use-conda --cores 4 -s rules/18_interpretability_analysis.smk
+Run independently: snakemake --use-conda --cores 4 -s rules/19_interpretability_analysis.smk
 """
+
+configfile: "config/config.yaml"
 
 rule interpretability_analysis:
     input:

@@ -32,10 +32,36 @@ rule fastqc_raw:
 
 def get_all_raw_fastqc(wildcards):
     """Get all raw FastQC outputs"""
-    train_df = pd.read_csv("results/features/metadata_train_processed.csv")
-    test_df = pd.read_csv("results/features/metadata_test_processed.csv")
-    samples = list(train_df["Run"]) + list(test_df["Run"])
-    return expand("results/qc/fastqc_raw/{sample}_1_fastqc.zip", sample=samples)
+    try:
+        train_df = pd.read_csv("results/features/metadata_train_processed.csv")
+        test_df = pd.read_csv("results/features/metadata_test_processed.csv")
+        
+        # Use robust extraction like in 02_download.smk
+        def extract_valid_runs(df):
+            runs = []
+            if 'Run' in df.columns:
+                for run in df["Run"].astype(str):
+                    run = str(run).strip()
+                    if run.startswith('SRR') and 'SRR' in run:
+                        import re
+                        match = re.search(r'SRR\d+', run)
+                        if match:
+                            runs.append(match.group(0))
+                    elif ',' in run and 'SRR' in run:
+                        import re
+                        match = re.search(r'SRR\d+', run)
+                        if match:
+                            runs.append(match.group(0))
+            return runs
+        
+        train_samples = extract_valid_runs(train_df)
+        test_samples = extract_valid_runs(test_df)
+        all_samples = list(set(train_samples + test_samples))
+        
+        return expand("results/qc/fastqc_raw/{sample}_1_fastqc.zip", sample=all_samples)
+    except Exception as e:
+        print(f"Error in get_all_raw_fastqc: {e}")
+        return []
 
 rule multiqc_raw:
     input:
@@ -108,10 +134,36 @@ rule fastqc_trimmed:
 
 def get_all_fastqc_trimmed(wildcards):
     """Get all trimmed FastQC outputs"""
-    train_df = pd.read_csv("results/features/metadata_train_processed.csv")
-    test_df = pd.read_csv("results/features/metadata_test_processed.csv")
-    samples = list(train_df["Run"]) + list(test_df["Run"])
-    return expand("results/qc/fastqc_trimmed/{sample}_1_fastqc.zip", sample=samples)
+    try:
+        train_df = pd.read_csv("results/features/metadata_train_processed.csv")
+        test_df = pd.read_csv("results/features/metadata_test_processed.csv")
+        
+        # Use robust extraction like in 02_download.smk
+        def extract_valid_runs(df):
+            runs = []
+            if 'Run' in df.columns:
+                for run in df["Run"].astype(str):
+                    run = str(run).strip()
+                    if run.startswith('SRR') and 'SRR' in run:
+                        import re
+                        match = re.search(r'SRR\d+', run)
+                        if match:
+                            runs.append(match.group(0))
+                    elif ',' in run and 'SRR' in run:
+                        import re
+                        match = re.search(r'SRR\d+', run)
+                        if match:
+                            runs.append(match.group(0))
+            return runs
+        
+        train_samples = extract_valid_runs(train_df)
+        test_samples = extract_valid_runs(test_df)
+        all_samples = list(set(train_samples + test_samples))
+        
+        return expand("results/qc/fastqc_trimmed/{sample}_1_fastqc.zip", sample=all_samples)
+    except Exception as e:
+        print(f"Error in get_all_fastqc_trimmed: {e}")
+        return []
 
 rule multiqc_processed:
     input:

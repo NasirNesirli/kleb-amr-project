@@ -96,10 +96,36 @@ rule filter_vcf:
         """
 
 def get_all_filtered_vcfs(wildcards):
-    train_df = pd.read_csv("results/features/metadata_train_processed.csv")
-    test_df = pd.read_csv("results/features/metadata_test_processed.csv")
-    samples = list(train_df["Run"]) + list(test_df["Run"])
-    return expand("results/snp/vcf/{sample}.filtered.vcf", sample=samples)
+    try:
+        train_df = pd.read_csv("results/features/metadata_train_processed.csv")
+        test_df = pd.read_csv("results/features/metadata_test_processed.csv")
+        
+        # Use robust extraction like in 02_download.smk
+        def extract_valid_runs(df):
+            runs = []
+            if 'Run' in df.columns:
+                for run in df["Run"].astype(str):
+                    run = str(run).strip()
+                    if run.startswith('SRR') and 'SRR' in run:
+                        import re
+                        match = re.search(r'SRR\d+', run)
+                        if match:
+                            runs.append(match.group(0))
+                    elif ',' in run and 'SRR' in run:
+                        import re
+                        match = re.search(r'SRR\d+', run)
+                        if match:
+                            runs.append(match.group(0))
+            return runs
+        
+        train_samples = extract_valid_runs(train_df)
+        test_samples = extract_valid_runs(test_df)
+        all_samples = list(set(train_samples + test_samples))
+        
+        return expand("results/snp/vcf/{sample}.filtered.vcf", sample=all_samples)
+    except Exception as e:
+        print(f"Error in get_all_filtered_vcfs: {e}")
+        return []
 
 rule combine_snps:
     input:

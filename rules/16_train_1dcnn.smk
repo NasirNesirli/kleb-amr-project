@@ -4,6 +4,8 @@ Trains 1D convolutional neural network on k-mer frequency spectra from balanced 
 Run independently: snakemake --use-conda --cores 8 -s rules/16_train_1dcnn.smk
 """
 
+configfile: "config/config.yaml"
+
 rule train_1dcnn:
     input:
         train="results/features/deep_models/{antibiotic}_kmer_train_final.npz",

@@ -53,7 +53,9 @@ checkpoint download_metadata_ready:
         train="results/features/metadata_train_processed.csv",
         test="results/features/metadata_test_processed.csv"
     output:
-        touch("results/.download_ready")
+        "results/.download_ready"
+    shell:
+        "touch {output}"
 
 rule download_sample:
     input:

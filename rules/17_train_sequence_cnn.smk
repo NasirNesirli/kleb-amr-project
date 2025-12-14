@@ -1,6 +1,9 @@
 """
-Train sequence-based 1D CNN using raw ACGT sequences
+Step 17: Train sequence-based 1D CNN using raw ACGT sequences
+Run independently: snakemake --use-conda --cores 8 -s rules/17_train_sequence_cnn.smk
 """
+
+configfile: "config/config.yaml"
 
 rule train_sequence_cnn:
     input:

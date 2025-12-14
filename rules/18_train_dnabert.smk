@@ -1,8 +1,10 @@
 """
-Step 17: DNABERT Training with PyTorch
+Step 18: DNABERT Training with PyTorch
 Trains transformer-based model on DNA sequences from balanced samples
-Run independently: snakemake --use-conda --cores 8 -s rules/17_train_dnabert.smk
+Run independently: snakemake --use-conda --cores 8 -s rules/18_train_dnabert.smk
 """
+
+configfile: "config/config.yaml"
 
 rule train_dnabert:
     input:

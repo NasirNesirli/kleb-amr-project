@@ -1,7 +1,10 @@
 """
-Rule for ensemble analysis of AMR prediction models.
+Step 20: Ensemble Analysis of AMR prediction models
 Combines predictions from all 5 models and evaluates ensemble performance.
+Run independently: snakemake --use-conda --cores 4 -s rules/20_ensemble_analysis.smk
 """
+
+configfile: "config/config.yaml"
 
 rule ensemble_analysis:
     input:

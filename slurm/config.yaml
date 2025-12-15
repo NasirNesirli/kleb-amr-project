@@ -1,0 +1,15 @@
+# Snakemake Slurm Profile Configuration
+cluster: "sbatch --parsable --account={cluster.account} --partition={cluster.partition} --cpus-per-task={cluster.cpus} --mem={cluster.mem} --time={cluster.time} --output=logs/slurm/{rule}_%j.out --error=logs/slurm/{rule}_%j.err --job-name={cluster.name}"
+cluster-status: "./slurm/status.py"
+cluster-cancel: "scancel"
+cluster-cancel-nargs: 50
+max-jobs-per-second: 1
+max-status-checks-per-second: 10
+local-cores: 2
+restart-times: 0
+jobs: 100
+keep-going: true
+rerun-incomplete: true
+printshellcmds: true
+use-conda: true
+conda-frontend: conda

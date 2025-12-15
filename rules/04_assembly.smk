@@ -46,8 +46,7 @@ rule spades_assembly:
     output:
         assembly="data/assemblies/{sample}_assembled.fasta"
     params:
-        outdir=temp(directory("data/assemblies/{sample}_spades")),
-        memory=config["resources"]["memory_gb"]
+        outdir=temp(directory("data/assemblies/{sample}_spades"))
     conda:
         "../envs/assembly.yaml"
     threads: config["resources"]["threads"]
@@ -57,8 +56,10 @@ rule spades_assembly:
         """
         spades.py -1 {input.r1} -2 {input.r2} \
             -o {params.outdir} \
-            -t {threads} -m {params.memory} \
-            --isolate 2> {log}
+            -t {threads} \
+            --isolate \
+            --only-assembler \
+            -k 21,33,55 2> {log}
         
         cp {params.outdir}/contigs.fasta {output.assembly}
         rm -rf {params.outdir}

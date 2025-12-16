@@ -54,6 +54,24 @@ rule spades_assembly:
         "logs/04_assembly/spades_{sample}.log"
     shell:
         """
+        # Check if we have sufficient reads for assembly
+        reads_r1=$(zcat {input.r1} | wc -l)
+        reads_r2=$(zcat {input.r2} | wc -l)
+        min_reads=1000
+        
+        if [ $reads_r1 -lt $min_reads ] || [ $reads_r2 -lt $min_reads ]; then
+            echo "ERROR: Insufficient reads for {wildcards.sample}: R1=$reads_r1 R2=$reads_r2 lines" | tee {log}
+            echo "Minimum required: $min_reads lines (250 reads)" | tee -a {log}
+            
+            # Create empty assembly file to mark sample as failed
+            echo ">failed_assembly_insufficient_data" > {output.assembly}
+            echo "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN" >> {output.assembly}
+            
+            # Clean up
+            rm -f {input.r1} {input.r2}
+            exit 0
+        fi
+        
         spades.py -1 {input.r1} -2 {input.r2} \
             -o {params.outdir} \
             -t {threads} \
@@ -61,7 +79,14 @@ rule spades_assembly:
             --only-assembler \
             -k 21,33,55 2> {log}
         
-        cp {params.outdir}/contigs.fasta {output.assembly}
+        if [ -f {params.outdir}/contigs.fasta ]; then
+            cp {params.outdir}/contigs.fasta {output.assembly}
+        else
+            echo "ERROR: SPAdes failed to produce contigs.fasta for {wildcards.sample}" | tee -a {log}
+            echo ">failed_assembly_spades_error" > {output.assembly}
+            echo "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN" >> {output.assembly}
+        fi
+        
         rm -rf {params.outdir}
         
         # Immediately delete downsampled files to save disk space

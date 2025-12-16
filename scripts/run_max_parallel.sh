@@ -19,7 +19,9 @@ PID2=$!
 wait $PID1 $PID2
 
 # QC and Assembly (high resource usage)
-snakemake --use-conda --cores 16 --jobs 4 preassembly_qc_all assembly_all postassembly_qc_all
+snakemake --use-conda --cores 16 --jobs 4 preassembly_qc_all assembly_all
+# Run postassembly_qc with limited jobs due to Kraken2 memory requirements
+snakemake --use-conda --cores 16 --jobs 2 postassembly_qc_all
 
 # Feature extraction (can run in parallel)
 snakemake --use-conda --cores 8 --jobs 4 amr_analysis_all &

@@ -41,10 +41,16 @@ rule run_amrfinder:
         """
 
 def get_all_amrfinder_outputs(wildcards):
+    import os
+
+    # If ready file exists, skip individual file checks
+    if os.path.exists("results/amr/.amr_ready"):
+        return []
+
     try:
         train_df = pd.read_csv("results/features/metadata_train_processed.csv")
         test_df = pd.read_csv("results/features/metadata_test_processed.csv")
-        
+
         # Use robust extraction like in 02_download.smk
         def extract_valid_runs(df):
             runs = []
@@ -62,11 +68,11 @@ def get_all_amrfinder_outputs(wildcards):
                         if match:
                             runs.append(match.group(0))
             return runs
-        
+
         train_samples = extract_valid_runs(train_df)
         test_samples = extract_valid_runs(test_df)
         all_samples = list(set(train_samples + test_samples))
-        
+
         return expand("results/amr/{sample}_amrfinder.tsv", sample=all_samples)
     except Exception as e:
         print(f"Error in get_all_amrfinder_outputs: {e}")
@@ -76,7 +82,8 @@ rule combine_amrfinder:
     input:
         get_all_amrfinder_outputs
     output:
-        "results/amr/combined_amrfinder.csv"
+        csv="results/amr/combined_amrfinder.csv",
+        ready=touch("results/amr/.amr_ready")
     conda:
         "../envs/amr_analysis.yaml"
     log:
@@ -86,4 +93,5 @@ rule combine_amrfinder:
 
 rule amr_analysis_all:
     input:
-        "results/amr/combined_amrfinder.csv"
+        "results/amr/combined_amrfinder.csv",
+        "results/amr/.amr_ready"

@@ -310,29 +310,39 @@ def multi_stage_selection(X, y, feature_names, target_features=500):
     return X, feature_names
 
 def main():
-    # Load data
-    train_df = pd.read_csv(snakemake.input.train)
-    test_df = pd.read_csv(snakemake.input.test)
-    
+    # Load data with memory optimization
+    print("Loading training data (large file)...")
+    train_df = pd.read_csv(snakemake.input.train, low_memory=False)
+
+    print("Loading test data...")
+    test_df = pd.read_csv(snakemake.input.test, low_memory=False)
+
     target_features = snakemake.params.n_features
-    
+
     # Separate metadata, target, and features
     meta_cols = ['sample_id', 'R', 'Year', 'Location']
     feature_cols = [c for c in train_df.columns if c not in meta_cols]
-    
+    test_feature_cols = [c for c in test_df.columns if c not in meta_cols]
+
+    print(f"Extracting features from DataFrames...")
     X_train = train_df[feature_cols].values
     y_train = train_df['R'].values
-    X_test = test_df[feature_cols].values
-    
+    X_test = test_df[test_feature_cols].values
+
+    # Free memory from DataFrames
+    del train_df
+    del test_df
+    import gc
+    gc.collect()
+
     print(f"Original dimensions: {X_train.shape}")
-    
+
     # Apply multi-stage feature selection
     X_train_selected, selected_features = multi_stage_selection(
         X_train, y_train, feature_cols, target_features
     )
-    
+
     # Apply same selection to test set
-    test_feature_cols = [c for c in test_df.columns if c not in meta_cols]
     selected_indices_train = [i for i, name in enumerate(feature_cols) if name in selected_features]
     selected_indices_test = [i for i, name in enumerate(test_feature_cols) if name in selected_features]
     
@@ -345,15 +355,26 @@ def main():
     X_test_selected = X_test[:, test_indices_common]
     
     print(f"Common features: {len(common_features)}")
-    
+
+    # Reload only metadata columns to save memory
+    print("Creating final datasets...")
+    meta_cols = ['sample_id', 'R', 'Year', 'Location']
+    train_meta = pd.read_csv(snakemake.input.train, usecols=meta_cols)
+    test_meta = pd.read_csv(snakemake.input.test, usecols=meta_cols)
+
     # Create final datasets
-    train_selected = train_df[meta_cols].copy()
-    test_selected = test_df[meta_cols].copy()
-    
+    train_selected = train_meta.copy()
+    test_selected = test_meta.copy()
+
     # Add selected features
     for i, feature_name in enumerate(common_features):
         train_selected[feature_name] = X_train_selected[:, i]
         test_selected[feature_name] = X_test_selected[:, i]
+
+    # Free memory
+    del train_meta, test_meta, X_train, X_test, X_train_selected, X_test_selected
+    import gc
+    gc.collect()
     
     # Create comprehensive importance DataFrame
     importance_df = pd.DataFrame({

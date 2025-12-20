@@ -250,8 +250,8 @@ def prepare_sequence_dataset(train_samples, test_samples, processed_dir,
         # Take a subset of sequences per sample for memory efficiency
         if sequences:
             # Randomly sample sequences if we have more than needed
-            selected_sequences = sequences[:min(50, len(sequences))]  # Max 50 sequences per sample
-            
+            selected_sequences = sequences[:min(30, len(sequences))]  # Max 30 sequences per sample (reduced from 50 for faster I/O)
+
             for seq_idx, seq in enumerate(selected_sequences):
                 all_sequences.append(seq)
                 all_labels.append(label)
@@ -269,8 +269,8 @@ def prepare_sequence_dataset(train_samples, test_samples, processed_dir,
             print(f"Debug: Test sample {sample_id} extracted {len(sequences)} sequences")
         
         if sequences:
-            selected_sequences = sequences[:min(50, len(sequences))]
-            
+            selected_sequences = sequences[:min(30, len(sequences))]  # Max 30 sequences per sample (reduced from 50 for faster I/O)
+
             for seq_idx, seq in enumerate(selected_sequences):
                 all_sequences.append(seq)
                 all_labels.append(label)
@@ -513,7 +513,7 @@ def cross_validation(X, y, sample_ids, location_year_groups=None, cv_folds=5, ra
         epochs = model_params.get('epochs', 50)  # Fewer epochs
         best_val_f1 = 0
         best_model_state = model.state_dict().copy()
-        patience = model_params.get('patience', 15)
+        patience = model_params.get('patience', 10)  # Reduced from 15 for faster training
         patience_counter = 0
         
         for epoch in range(epochs):
@@ -736,7 +736,7 @@ def main():
         'learning_rate': getattr(snakemake.params, 'learning_rate', 0.0001),
         'dropout': getattr(snakemake.params, 'dropout', 0.5),
         'weight_decay': getattr(snakemake.params, 'weight_decay', 1e-3),
-        'patience': getattr(snakemake.params, 'patience', 15)
+        'patience': getattr(snakemake.params, 'patience', 10)  # Reduced from 15 for faster training
     }
     
     cv_folds = getattr(snakemake.params, 'cv_folds', 5)

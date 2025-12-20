@@ -333,7 +333,7 @@ def cross_validation(X, y, location_year_groups=None, cv_folds=5, random_state=4
         epochs = model_params.get('epochs', 100)
         best_val_f1 = 0
         best_model_state = model.state_dict().copy()  # Initialize with current model
-        patience = model_params.get('patience', 10)
+        patience = model_params.get('patience', 7)  # Reduced from 10 for faster training
         patience_counter = 0
         
         for epoch in range(epochs):
@@ -595,7 +595,7 @@ def main():
         'learning_rate': snakemake.params.get('learning_rate', 0.001),
         'dropout': snakemake.params.get('dropout', 0.3),
         'weight_decay': snakemake.params.get('weight_decay', 1e-4),
-        'patience': snakemake.params.get('patience', 10)
+        'patience': snakemake.params.get('patience', 7)  # Reduced from 10 for faster training
     }
     
     cv_folds = snakemake.params.get('cv_folds', 5)

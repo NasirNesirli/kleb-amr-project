@@ -95,11 +95,43 @@ rule filter_vcf:
             {input.vcf} -o {output.vcf} 2> {log}
         """
 
+def check_pairing(sample):
+    """Check if paired-end files are properly synchronized"""
+    import gzip
+    import os
+
+    r1_path = f"data/processed/{sample}_1.fastq.gz"
+    r2_path = f"data/processed/{sample}_2.fastq.gz"
+
+    if not (os.path.exists(r1_path) and os.path.exists(r2_path)):
+        return False
+
+    try:
+        # Read first read ID from each file
+        with gzip.open(r1_path, 'rt') as f1, gzip.open(r2_path, 'rt') as f2:
+            r1_line = f1.readline().strip()
+            r2_line = f2.readline().strip()
+
+            # Extract read number after the dot (e.g., SRR123.1 -> 1)
+            if '.' in r1_line and '.' in r2_line:
+                r1_num = r1_line.split()[0].split('.')[-1]
+                r2_num = r2_line.split()[0].split('.')[-1]
+                return r1_num == r2_num
+            return True  # If format is different, assume OK
+    except Exception:
+        return False
+
 def get_all_filtered_vcfs(wildcards):
+    import os
+
+    # If ready file exists, skip individual file checks
+    if os.path.exists("results/snp/.snp_ready"):
+        return []
+
     try:
         train_df = pd.read_csv("results/features/metadata_train_processed.csv")
         test_df = pd.read_csv("results/features/metadata_test_processed.csv")
-        
+
         # Use robust extraction like in 02_download.smk
         def extract_valid_runs(df):
             runs = []
@@ -117,12 +149,18 @@ def get_all_filtered_vcfs(wildcards):
                         if match:
                             runs.append(match.group(0))
             return runs
-        
+
         train_samples = extract_valid_runs(train_df)
         test_samples = extract_valid_runs(test_df)
         all_samples = list(set(train_samples + test_samples))
-        
-        return expand("results/snp/vcf/{sample}.filtered.vcf", sample=all_samples)
+
+        # Filter out samples with broken pairing
+        valid_samples = [s for s in all_samples if check_pairing(s)]
+        broken_count = len(all_samples) - len(valid_samples)
+        if broken_count > 0:
+            print(f"Note: Excluding {broken_count} samples with broken paired-end synchronization")
+
+        return expand("results/snp/vcf/{sample}.filtered.vcf", sample=valid_samples)
     except Exception as e:
         print(f"Error in get_all_filtered_vcfs: {e}")
         return []
@@ -131,7 +169,8 @@ rule combine_snps:
     input:
         get_all_filtered_vcfs
     output:
-        "results/snp/combined_snps.csv"
+        csv="results/snp/combined_snps.csv",
+        ready=touch("results/snp/.snp_ready")
     conda:
         "../envs/snp_analysis.yaml"
     log:
@@ -141,4 +180,5 @@ rule combine_snps:
 
 rule snp_analysis_all:
     input:
-        "results/snp/combined_snps.csv"
+        "results/snp/combined_snps.csv",
+        "results/snp/.snp_ready"

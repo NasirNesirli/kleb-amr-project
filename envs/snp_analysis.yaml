@@ -7,6 +7,7 @@ dependencies:
   - python=3.11
   - pandas=2.3.3
   - numpy=2.3.5
+  - scipy=1.16.3
   - wget=1.25.0
   - bwa=0.7.18
   - samtools=1.21

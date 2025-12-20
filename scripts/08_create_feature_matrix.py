@@ -10,10 +10,18 @@ from pathlib import Path
 
 def main():
     # Load inputs
+    print("Loading AMR data...")
     amr_df = pd.read_csv(snakemake.input.amr)
-    snp_df = pd.read_csv(snakemake.input.snp)
+
+    print("Loading SNP data (large file, this may take a while)...")
+    # Use low_memory=False and specify dtype to handle large file
+    snp_df = pd.read_csv(snakemake.input.snp, low_memory=False, dtype={0: str})
+
+    print("Loading metadata...")
     meta_train = pd.read_csv(snakemake.input.meta_train)
     meta_test = pd.read_csv(snakemake.input.meta_test)
+
+    print(f"Loaded: AMR={amr_df.shape}, SNP={snp_df.shape}")
     
     antibiotics = snakemake.params.antibiotics
     outdir = Path(snakemake.params.outdir)

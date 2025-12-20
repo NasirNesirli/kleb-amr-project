@@ -2,6 +2,12 @@
 """
 Train LightGBM model with 5-fold nested CV and hyperparameter tuning.
 Uses batch-corrected features.
+
+Performance optimizations:
+- Reduced num_leaves grid from [31, 63, 127] to [31, 63] in config (33% faster)
+- Convert DataFrames to numpy arrays for better memory efficiency
+- Grid search: 54 combinations (vs XGBoost's 27)
+- Total fits: 810 (5 folds × 54 combinations × 3 inner CV)
 """
 
 import pandas as pd
@@ -125,8 +131,9 @@ def main():
     feature_cols = [c for c in train_merged.columns if c not in meta_cols]
     
     print(f"Number of features: {len(feature_cols)}")
-    
-    X_train = train_merged[feature_cols]
+
+    # Convert to numpy arrays for performance (consistent with XGBoost)
+    X_train = train_merged[feature_cols].values
     y_train = train_merged['R'].astype(int).values
     
     # Create location-year groups for geographic-temporal CV
@@ -135,8 +142,8 @@ def main():
     print(f"Training location-year groups: {len(np.unique(location_year_train))} unique groups")
     print(f"Location-year distribution: {Counter(location_year_train).most_common(10)}")
     print("Using geographic-temporal CV (location-year grouping)")
-    
-    X_test = test_merged[feature_cols]
+
+    X_test = test_merged[feature_cols].values
     y_test = test_merged['R'].astype(int).values
     
     print(f"Training class distribution: {np.bincount(y_train)}")
@@ -184,19 +191,18 @@ def main():
     
     cv_results = []
     for fold, (train_idx, val_idx) in enumerate(outer_cv.split(X_train, y_train, groups=location_year_train)):
-        X_tr, X_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
+        X_tr, X_val = X_train[train_idx], X_train[val_idx]
         y_tr, y_val = y_train[train_idx], y_train[val_idx]
         loc_year_tr = location_year_train[train_idx] if location_year_train is not None else None
-        
+
         print(f"Fold {fold + 1}: Train groups={len(np.unique(loc_year_tr)) if loc_year_tr is not None else 'N/A'}, "
               f"Val groups={len(np.unique(location_year_train[val_idx])) if location_year_train is not None else 'N/A'}")
-        
+
         # Grid search on inner fold
         # Note: For simplicity, using standard CV for hyperparameter tuning
         grid_search = GridSearchCV(
             base_model, grid, cv=3, scoring='f1', n_jobs=-1  # Reduced CV for speed
         )
-        # X_tr and X_val are already DataFrames with feature names
         grid_search.fit(X_tr, y_tr)
         
         # Evaluate on validation fold

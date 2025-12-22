@@ -39,6 +39,31 @@ except ImportError:
     print("Warning: BioPython not available. Install with: conda install -c bioconda biopython")
     sys.exit(1)
 
+# Configure PyTorch parallelism based on Snakemake threads
+def configure_pytorch_threads():
+    """Configure PyTorch to use all available threads from Snakemake."""
+    try:
+        num_threads = snakemake.threads
+        print(f"Configuring PyTorch to use {num_threads} threads")
+
+        # Set PyTorch intraop parallelism (within operations)
+        torch.set_num_threads(num_threads)
+
+        # Set environment variables for various backends
+        os.environ['OMP_NUM_THREADS'] = str(num_threads)
+        os.environ['MKL_NUM_THREADS'] = str(num_threads)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(num_threads)
+
+        # Calculate num_workers for DataLoader (leave some threads for computation)
+        # Use approximately 1/4 of threads for data loading, rest for computation
+        num_workers = max(1, num_threads // 4)
+
+        return num_workers
+    except (NameError, AttributeError):
+        # Fallback if not running under Snakemake
+        print("Warning: Not running under Snakemake, using default thread settings")
+        return 2
+
 class GeographicTemporalKFold(BaseCrossValidator):
     """
     K-Fold cross-validation that respects geographic and temporal structure.
@@ -361,10 +386,11 @@ def evaluate(model, dataloader, device):
     
     return np.array(all_preds), np.array(all_probs), np.array(all_labels)
 
-def cross_validation(X, y, sample_ids, location_year_groups=None, cv_folds=5, random_state=42, **model_params):
+def cross_validation(X, y, sample_ids, location_year_groups=None, cv_folds=5, random_state=42, num_workers=2, **model_params):
     """Perform cross-validation with sequence data."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
+    print(f"DataLoader workers: {num_workers}")
     
     # For sequence data, we need to split by original sample IDs to avoid data leakage
     # Extract original sample IDs
@@ -468,14 +494,18 @@ def cross_validation(X, y, sample_ids, location_year_groups=None, cv_folds=5, ra
         
         # Create dataloaders (no weighted sampling - use class weights in loss instead)
         train_loader = DataLoader(
-            train_dataset, 
+            train_dataset,
             batch_size=model_params.get('batch_size', 16),  # Smaller batch size for sequences
-            shuffle=True
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True if torch.cuda.is_available() else False
         )
         val_loader = DataLoader(
             val_dataset,
             batch_size=model_params.get('batch_size', 16),
-            shuffle=False
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True if torch.cuda.is_available() else False
         )
         
         # Initialize model
@@ -561,12 +591,15 @@ def cross_validation(X, y, sample_ids, location_year_groups=None, cv_folds=5, ra
     return cv_results, fold_models
 
 def main():
+    # Configure PyTorch threading for optimal CPU utilization
+    num_workers = configure_pytorch_threads()
+
     # Check if running under Snakemake or standalone
     if 'snakemake' not in globals():
         print("Error: This script must be run from Snakemake pipeline.")
         print("Use: snakemake --use-conda --cores 8 results/models/sequence_cnn/{antibiotic}_results.json")
         sys.exit(1)
-    
+
     try:
         # Load sample information from tree model datasets
         train_df = pd.read_csv(snakemake.input.train)
@@ -622,33 +655,51 @@ def main():
         print(f"WARNING: Found {len(overlap)} samples in both train and test sets!")
         raise ValueError(f"Data leakage detected: {list(overlap)[:5]}")
     
-    # Create mapping from sample_X to SRR ID to get proper labels
-    sample_to_srr_map = {}
-    for i, row in train_metadata.iterrows():
-        sample_to_srr_map[f"sample_{i}"] = row['Run']
-    
-    # Map labels from tree model data to SRR IDs
+    # Sample IDs in tree model files are already SRR IDs - no mapping needed!
+    # Map labels directly from tree model data
     train_srr_to_label = {}
     for _, row in real_train_samples.iterrows():
-        if row['sample_id'] in sample_to_srr_map:
-            srr_id = sample_to_srr_map[row['sample_id']]
-            train_srr_to_label[srr_id] = row['R']
-    
+        train_srr_to_label[row['sample_id']] = int(row['R'])
+
     test_srr_to_label = {}
     for _, row in real_test_samples.iterrows():
-        test_srr_to_label[row['sample_id']] = row['R']  # Test samples already use SRR IDs
+        test_srr_to_label[row['sample_id']] = int(row['R'])
     
     # Create dataframes with proper labels
+    print(f"Building training labels from {len(train_srr_to_label)} mapped samples")
+    print(f"Building test labels from {len(test_srr_to_label)} mapped samples")
+
+    train_labels = []
+    train_matched = 0
+    for srr_id in train_srr_ids:
+        if srr_id in train_srr_to_label:
+            train_labels.append(train_srr_to_label[srr_id])
+            train_matched += 1
+        else:
+            train_labels.append(0)  # Default to susceptible if not found
+
+    test_labels = []
+    test_matched = 0
+    for srr_id in test_srr_ids:
+        if srr_id in test_srr_to_label:
+            test_labels.append(test_srr_to_label[srr_id])
+            test_matched += 1
+        else:
+            test_labels.append(0)
+
+    print(f"Matched {train_matched}/{len(train_srr_ids)} training labels")
+    print(f"Matched {test_matched}/{len(test_srr_ids)} test labels")
+
     train_for_sequences = pd.DataFrame({
         'sample_id': train_srr_ids,
-        'R': [train_srr_to_label.get(srr_id, 0) for srr_id in train_srr_ids]
+        'R': train_labels
     })
-    
+
     test_for_sequences = pd.DataFrame({
-        'sample_id': test_srr_ids, 
-        'R': [test_srr_to_label.get(srr_id, 0) for srr_id in test_srr_ids]
+        'sample_id': test_srr_ids,
+        'R': test_labels
     })
-    
+
     print(f"Prepared {len(train_for_sequences)} training samples")
     print(f"Prepared {len(test_for_sequences)} test samples")
     print(f"Train labels: {train_for_sequences['R'].value_counts().to_dict()}")
@@ -736,9 +787,10 @@ def main():
         'learning_rate': getattr(snakemake.params, 'learning_rate', 0.0001),
         'dropout': getattr(snakemake.params, 'dropout', 0.5),
         'weight_decay': getattr(snakemake.params, 'weight_decay', 1e-3),
-        'patience': getattr(snakemake.params, 'patience', 10)  # Reduced from 15 for faster training
+        'patience': getattr(snakemake.params, 'patience', 10),  # Reduced from 15 for faster training
+        'num_workers': num_workers  # Add num_workers for DataLoader parallelism
     }
-    
+
     cv_folds = getattr(snakemake.params, 'cv_folds', 5)
     random_state = getattr(snakemake.params, 'random_state', 42)
     
@@ -778,7 +830,7 @@ def main():
     # Cross-validation
     print(f"\nPerforming {cv_folds}-fold cross-validation...")
     cv_results, fold_models = cross_validation(
-        X_train, y_train, train_sample_ids, location_year_train, cv_folds, random_state, **model_params
+        X_train, y_train, train_sample_ids, location_year_train, cv_folds, random_state, num_workers, **model_params
     )
     
     # Train final model on all training data
@@ -789,8 +841,20 @@ def main():
     test_dataset = SequenceDataset(X_test, y_test)
     
     # Create dataloaders (no weighted sampling - use class weights in loss instead)
-    train_loader = DataLoader(train_dataset, batch_size=model_params['batch_size'], shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=model_params['batch_size'], shuffle=False)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=model_params['batch_size'],
+        shuffle=True,
+        num_workers=model_params.get('num_workers', 2),
+        pin_memory=True if torch.cuda.is_available() else False
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=model_params['batch_size'],
+        shuffle=False,
+        num_workers=model_params.get('num_workers', 2),
+        pin_memory=True if torch.cuda.is_available() else False
+    )
     
     final_model = SequenceCNN(seq_length=seq_length, dropout=model_params['dropout']).to(device)
     

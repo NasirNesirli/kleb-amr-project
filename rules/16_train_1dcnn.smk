@@ -19,11 +19,11 @@ rule train_1dcnn:
         cv_folds=config["models"]["cv_folds"],
         random_state=config["models"]["random_state"],
         epochs=100,
-        batch_size=32,
-        learning_rate=0.001,
+        batch_size=64,
+        learning_rate=0.0005,
         dropout=0.3,
         weight_decay=1e-4,
-        patience=10
+        patience=15
     conda:
         "../envs/cnn.yaml"
     threads: config["resources"]["threads"]

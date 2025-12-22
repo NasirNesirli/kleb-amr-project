@@ -29,7 +29,7 @@ rule train_sequence_cnn:
         random_state=42
     conda:
         "../envs/cnn.yaml"
-    threads: 8
+    threads: config["resources"]["threads"]
     script:
         "../scripts/17_train_sequence_cnn.py"
 

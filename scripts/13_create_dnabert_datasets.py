@@ -161,12 +161,9 @@ def main():
     
     print(f"Loaded metadata: {len(train_metadata)} train samples, {len(test_metadata)} test samples")
     
-    # Create mapping from sample_X to SRR ID
-    sample_to_srr_map = {}
-    for i, row in train_metadata.iterrows():
-        sample_to_srr_map[f"sample_{i}"] = row['Run']
-    
-    print(f"Created sample->SRR mapping for {len(sample_to_srr_map)} training samples")
+    # Note: sample_ids in tree_models files are already SRR IDs, no mapping needed
+    # Keeping this section for documentation purposes only
+    print(f"Using direct SRR IDs from tree_models files (no mapping needed)")
     
     # Parameters
     processed_dir = Path(snakemake.params.processed_dir)
@@ -200,8 +197,8 @@ def main():
         sample_id = row['sample_id']
         label = int(row['R'])
         
-        # Map sample_X to SRR ID for FASTQ file access
-        srr_id = sample_to_srr_map.get(sample_id, sample_id)  # Fallback to original ID
+        # sample_id is already the SRR ID from tree_models file
+        srr_id = sample_id
         
         sequence_data, attention_masks = create_sequence_features_for_sample(
             srr_id, processed_dir, vocab, k, n_reads, max_seq_len, sequences_per_sample

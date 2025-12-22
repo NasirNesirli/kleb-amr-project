@@ -27,8 +27,35 @@ from matplotlib.backends.backend_pdf import PdfPages
 from tqdm import tqdm
 import warnings
 from collections import Counter
+import os
+import sys
 
 warnings.filterwarnings('ignore')
+
+# Configure PyTorch parallelism based on Snakemake threads
+def configure_pytorch_threads():
+    """Configure PyTorch to use all available threads from Snakemake."""
+    try:
+        num_threads = snakemake.threads
+        print(f"Configuring PyTorch to use {num_threads} threads")
+
+        # Set PyTorch intraop parallelism (within operations)
+        torch.set_num_threads(num_threads)
+
+        # Set environment variables for various backends
+        os.environ['OMP_NUM_THREADS'] = str(num_threads)
+        os.environ['MKL_NUM_THREADS'] = str(num_threads)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(num_threads)
+
+        # Calculate num_workers for DataLoader (leave some threads for computation)
+        # Use approximately 1/4 of threads for data loading, rest for computation
+        num_workers = max(1, num_threads // 4)
+
+        return num_workers
+    except (NameError, AttributeError):
+        # Fallback if not running under Snakemake
+        print("Warning: Not running under Snakemake, using default thread settings")
+        return 2
 
 class GeographicTemporalKFold(BaseCrossValidator):
     """
@@ -382,12 +409,16 @@ def cross_validation(sequences, labels, dnabert_tokenizer, location_year_groups=
         train_loader = DataLoader(
             train_dataset,
             batch_size=model_params.get('batch_size', 16),
-            shuffle=True
+            shuffle=True,
+            num_workers=model_params.get('num_workers', 2),
+            pin_memory=True if torch.cuda.is_available() else False
         )
         val_loader = DataLoader(
             val_dataset,
             batch_size=model_params.get('batch_size', 16),
-            shuffle=False
+            shuffle=False,
+            num_workers=model_params.get('num_workers', 2),
+            pin_memory=True if torch.cuda.is_available() else False
         )
         
         # Initialize model
@@ -488,12 +519,16 @@ def train_final_model(train_sequences, train_labels, test_sequences, test_labels
     train_loader = DataLoader(
         train_dataset,
         batch_size=model_params.get('batch_size', 16),
-        shuffle=True
+        shuffle=True,
+        num_workers=model_params.get('num_workers', 2),
+        pin_memory=True if torch.cuda.is_available() else False
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=model_params.get('batch_size', 16),
-        shuffle=False
+        shuffle=False,
+        num_workers=model_params.get('num_workers', 2),
+        pin_memory=True if torch.cuda.is_available() else False
     )
     
     # Initialize model
@@ -672,6 +707,9 @@ def reconstruct_sequences_from_tokens(input_ids, attention_mask, old_tokenizer):
     return sequences
 
 def main():
+    # Configure PyTorch threading for optimal CPU utilization
+    num_workers = configure_pytorch_threads()
+
     # Load datasets
     train_data = np.load(snakemake.input.train, allow_pickle=True)
     test_data = np.load(snakemake.input.test, allow_pickle=True) if snakemake.input.test else None
@@ -800,7 +838,8 @@ def main():
         'n_layers': snakemake.params.get('n_layers', 4),
         'dropout': snakemake.params.get('dropout', 0.1),
         'weight_decay': snakemake.params.get('weight_decay', 0.01),
-        'patience': snakemake.params.get('patience', 5)
+        'patience': snakemake.params.get('patience', 5),
+        'num_workers': num_workers  # Add num_workers for DataLoader parallelism
     }
     
     cv_folds = snakemake.params.get('cv_folds', 5)

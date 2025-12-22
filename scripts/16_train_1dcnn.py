@@ -11,8 +11,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import StratifiedKFold, BaseCrossValidator
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
-    f1_score, balanced_accuracy_score, roc_auc_score, 
+    f1_score, balanced_accuracy_score, roc_auc_score,
     classification_report, confusion_matrix
 )
 import json
@@ -24,8 +25,34 @@ from matplotlib.backends.backend_pdf import PdfPages
 from tqdm import tqdm
 import warnings
 from collections import Counter
+import os
 
 warnings.filterwarnings('ignore')
+
+# Configure PyTorch parallelism based on Snakemake threads
+def configure_pytorch_threads():
+    """Configure PyTorch to use all available threads from Snakemake."""
+    try:
+        num_threads = snakemake.threads
+        print(f"Configuring PyTorch to use {num_threads} threads")
+
+        # Set PyTorch intraop parallelism (within operations)
+        torch.set_num_threads(num_threads)
+
+        # Set environment variables for various backends
+        os.environ['OMP_NUM_THREADS'] = str(num_threads)
+        os.environ['MKL_NUM_THREADS'] = str(num_threads)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(num_threads)
+
+        # Calculate num_workers for DataLoader (leave some threads for computation)
+        # Use approximately 1/4 of threads for data loading, rest for computation
+        num_workers = max(1, num_threads // 4)
+
+        return num_workers
+    except (NameError, AttributeError):
+        # Fallback if not running under Snakemake
+        print("Warning: Not running under Snakemake, using default thread settings")
+        return 2
 
 class GeographicTemporalKFold(BaseCrossValidator):
     """
@@ -232,33 +259,43 @@ def extract_feature_importance(model, dataloader, device):
     
     return feature_importance
 
-def cross_validation(X, y, location_year_groups=None, cv_folds=5, random_state=42, **model_params):
+def cross_validation(X, y, location_year_groups=None, cv_folds=5, random_state=42, num_workers=2, use_geographic_cv=False, **model_params):
     """Perform cross-validation with optional phylogenetic awareness."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
-    
-    # Use phylogenetic CV if SNP cluster info available
-    if location_year_groups is not None:
+    print(f"DataLoader workers: {num_workers}")
+
+    # Use phylogenetic CV only if explicitly enabled and groups are available
+    if use_geographic_cv and location_year_groups is not None:
         try:
             cv_splitter = GeographicTemporalKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
-            print("Using phylogenetic-aware cross-validation")
+            print("Using geographic-temporal cross-validation")
         except ValueError as e:
-            print(f"Warning: Cannot use phylogenetic CV ({e}), falling back to stratified CV")
+            print(f"Warning: Cannot use geographic-temporal CV ({e}), falling back to stratified CV")
             cv_splitter = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
             location_year_groups = None
     else:
         cv_splitter = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
-        print("Using stratified cross-validation")
+        if use_geographic_cv:
+            print("Geographic-temporal CV disabled or groups not available, using stratified cross-validation")
+        else:
+            print("Using stratified cross-validation (geographic-temporal CV disabled for stability)")
     
     cv_results = []
     fold_models = []
     
     for fold, (train_idx, val_idx) in enumerate(cv_splitter.split(X, y, groups=location_year_groups)):
         print(f"\nFold {fold + 1}/{cv_folds}")
-        
+
         # Split data
         X_train_fold, X_val_fold = X[train_idx], X[val_idx]
         y_train_fold, y_val_fold = y[train_idx], y[val_idx]
+
+        # Standardize features (zero mean, unit variance)
+        scaler = StandardScaler()
+        X_train_fold = scaler.fit_transform(X_train_fold)
+        X_val_fold = scaler.transform(X_val_fold)
+        print(f"  Features standardized: mean={X_train_fold.mean():.4f}, std={X_train_fold.std():.4f}")
         
         # Log cluster information if available
         if location_year_groups is not None:
@@ -274,14 +311,18 @@ def cross_validation(X, y, location_year_groups=None, cv_folds=5, random_state=4
         
         # Create dataloaders (no weighted sampling - use class weights in loss instead)
         train_loader = DataLoader(
-            train_dataset, 
+            train_dataset,
             batch_size=model_params.get('batch_size', 32),
-            shuffle=True
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True if torch.cuda.is_available() else False
         )
         val_loader = DataLoader(
             val_dataset,
             batch_size=model_params.get('batch_size', 32),
-            shuffle=False
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True if torch.cuda.is_available() else False
         )
         
         # Initialize model
@@ -331,33 +372,35 @@ def cross_validation(X, y, location_year_groups=None, cv_folds=5, random_state=4
         
         # Training loop
         epochs = model_params.get('epochs', 100)
-        best_val_f1 = 0
+        best_val_auc = 0
         best_model_state = model.state_dict().copy()  # Initialize with current model
-        patience = model_params.get('patience', 7)  # Reduced from 10 for faster training
+        patience = model_params.get('patience', 15)  # Increased from 7 for more stable training
         patience_counter = 0
-        
+
         for epoch in range(epochs):
             train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
             val_preds, val_probs, val_labels = evaluate(model, val_loader, device)
-            
-            # Handle single-class validation during training
+
+            # Calculate metrics - use AUC for early stopping (more stable than F1)
             if len(set(val_labels)) == 1:
+                val_auc = 0.5
                 val_f1 = 0.0
             else:
+                val_auc = roc_auc_score(val_labels, val_probs)
                 val_f1 = f1_score(val_labels, val_preds)
-            
-            if val_f1 > best_val_f1:
-                best_val_f1 = val_f1
+
+            if val_auc > best_val_auc:
+                best_val_auc = val_auc
                 best_model_state = model.state_dict().copy()
                 patience_counter = 0
             else:
                 patience_counter += 1
-            
+
             if epoch % 10 == 0:
-                print(f"Epoch {epoch}: train_loss={train_loss:.4f}, val_f1={val_f1:.4f}")
-            
+                print(f"Epoch {epoch}: train_loss={train_loss:.4f}, val_auc={val_auc:.4f}, val_f1={val_f1:.4f}")
+
             if patience_counter >= patience:
-                print(f"Early stopping at epoch {epoch}")
+                print(f"Early stopping at epoch {epoch} (best val_auc={best_val_auc:.4f})")
                 break
         
         # Load best model
@@ -395,24 +438,34 @@ def cross_validation(X, y, location_year_groups=None, cv_folds=5, random_state=4
     
     return cv_results, fold_models
 
-def train_final_model(X_train, y_train, X_test, y_test, **model_params):
+def train_final_model(X_train, y_train, X_test, y_test, num_workers=2, **model_params):
     """Train final model on all training data."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
+
+    # Standardize features
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+    print(f"Features standardized for final model: mean={X_train.mean():.4f}, std={X_train.std():.4f}")
+
     # Create datasets
     train_dataset = KmerDataset(X_train, y_train)
     test_dataset = KmerDataset(X_test, y_test)
-    
+
     # Create dataloaders (no weighted sampling - use class weights in loss instead)
     train_loader = DataLoader(
         train_dataset,
         batch_size=model_params.get('batch_size', 32),
-        shuffle=True
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True if torch.cuda.is_available() else False
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=model_params.get('batch_size', 32),
-        shuffle=False
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True if torch.cuda.is_available() else False
     )
     
     # Initialize model
@@ -528,6 +581,9 @@ def create_visualizations(cv_results, test_results, feature_importance, kmer_nam
         plt.close()
 
 def main():
+    # Configure PyTorch threading for optimal CPU utilization
+    num_workers = configure_pytorch_threads()
+
     # Load k-mer dataset
     kmer_data = np.load(snakemake.input.train, allow_pickle=True)
     kmer_test_data = np.load(snakemake.input.test, allow_pickle=True) if snakemake.input.test else None
@@ -603,14 +659,16 @@ def main():
     
     # Cross-validation
     print(f"\nPerforming {cv_folds}-fold cross-validation...")
+    # Disable geographic-temporal CV by default for stability (set use_geographic_cv=True to enable)
+    use_geographic_cv = False
     cv_results, fold_models = cross_validation(
-        X_train, y_train, location_year_train, cv_folds, random_state, **model_params
+        X_train, y_train, location_year_train, cv_folds, random_state, num_workers, use_geographic_cv, **model_params
     )
-    
+
     # Train final model
     print(f"\nTraining final model...")
     final_model, test_results, feature_importance = train_final_model(
-        X_train, y_train, X_test, y_test, **model_params
+        X_train, y_train, X_test, y_test, num_workers, **model_params
     )
     
     # Save results

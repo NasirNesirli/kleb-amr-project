@@ -27,7 +27,7 @@ rule create_feature_matrix:
     log:
         "logs/08_feature_matrix/create_matrix.log"
     script:
-        "../scripts/08_create_feature_matrix.py"
+        "../scripts/08_feature_matrix.py"
 
 rule feature_matrix_all:
     input:

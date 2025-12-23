@@ -541,29 +541,30 @@ def cross_validation(X, y, sample_ids, location_year_groups=None, cv_folds=5, ra
         
         # Training loop
         epochs = model_params.get('epochs', 50)  # Fewer epochs
-        best_val_f1 = 0
+        best_val_auc = 0
         best_model_state = model.state_dict().copy()
-        patience = model_params.get('patience', 10)  # Reduced from 15 for faster training
+        patience = model_params.get('patience', 15)  # Increased from 10 for more stable training
         patience_counter = 0
-        
+
         for epoch in range(epochs):
             train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
             val_preds, val_probs, val_labels = evaluate(model, val_loader, device)
-            
+
             val_f1 = f1_score(val_labels, val_preds, zero_division=0)
-            
-            if val_f1 > best_val_f1:
-                best_val_f1 = val_f1
+            val_auc = roc_auc_score(val_labels, val_probs) if len(np.unique(val_labels)) > 1 else 0.5
+
+            if val_auc > best_val_auc:
+                best_val_auc = val_auc
                 best_model_state = model.state_dict().copy()
                 patience_counter = 0
             else:
                 patience_counter += 1
-            
+
             if epoch % 10 == 0:
-                print(f"Epoch {epoch}: train_loss={train_loss:.4f}, val_f1={val_f1:.4f}")
-            
+                print(f"Epoch {epoch}: train_loss={train_loss:.4f}, val_f1={val_f1:.4f}, val_auc={val_auc:.4f}")
+
             if patience_counter >= patience:
-                print(f"Early stopping at epoch {epoch}")
+                print(f"Early stopping at epoch {epoch} (best val_auc={best_val_auc:.4f})")
                 break
         
         # Load best model
@@ -787,7 +788,7 @@ def main():
         'learning_rate': getattr(snakemake.params, 'learning_rate', 0.0001),
         'dropout': getattr(snakemake.params, 'dropout', 0.5),
         'weight_decay': getattr(snakemake.params, 'weight_decay', 1e-3),
-        'patience': getattr(snakemake.params, 'patience', 10),  # Reduced from 15 for faster training
+        'patience': getattr(snakemake.params, 'patience', 15),  # Increased from 10 for more stable training
         'num_workers': num_workers  # Add num_workers for DataLoader parallelism
     }
 
@@ -830,7 +831,7 @@ def main():
     # Cross-validation
     print(f"\nPerforming {cv_folds}-fold cross-validation...")
     cv_results, fold_models = cross_validation(
-        X_train, y_train, train_sample_ids, location_year_train, cv_folds, random_state, num_workers, **model_params
+        X_train, y_train, train_sample_ids, location_year_train, cv_folds, random_state, **model_params
     )
     
     # Train final model on all training data

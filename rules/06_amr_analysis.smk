@@ -89,7 +89,7 @@ rule combine_amrfinder:
     log:
         "logs/06_amr_analysis/combine.log"
     script:
-        "../scripts/06_run_amrfinder.py"
+        "../scripts/06_amr_analysis.py"
 
 rule amr_analysis_all:
     input:

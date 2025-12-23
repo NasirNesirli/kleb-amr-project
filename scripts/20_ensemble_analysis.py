@@ -13,6 +13,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 import warnings
+import sys
+
+# Add project directory to path for utils imports (needed when Snakemake copies script)
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
 
 # Import shared utilities
 from utils.ensemble_methods import ModelEnsemble, create_ensemble_from_results, evaluate_ensemble_performance
@@ -24,7 +29,7 @@ from utils.output_validation import OutputValidator
 warnings.filterwarnings('ignore')
 
 
-def load_model_predictions(results_dir, antibiotic, models=['xgboost', 'lightgbm', 'cnn', 'sequence_cnn', 'dnabert']):
+def load_model_predictions(results_dir, antibiotic, models=['xgboost', 'lightgbm']):
     """
     Load actual model predictions from saved results.
     

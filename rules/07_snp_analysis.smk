@@ -176,7 +176,7 @@ rule combine_snps:
     log:
         "logs/07_snp_analysis/combine_snps.log"
     script:
-        "../scripts/07_run_snp_analysis.py"
+        "../scripts/07_snp_analysis.py"
 
 rule snp_analysis_all:
     input:

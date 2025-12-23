@@ -32,7 +32,7 @@ rule downsample_reads:
         "logs/04_assembly/downsample_{sample}.log"
     shell:
         """
-        python scripts/04_run_assembly.py downsample \
+        python scripts/04_assembly.py downsample \
             --r1 {input.r1} --r2 {input.r2} \
             --out_r1 {output.r1} --out_r2 {output.r2} \
             --genome_size $(cat {input.genome_size}) \

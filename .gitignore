@@ -158,11 +158,17 @@ results/qc/*.zip
 results/qc/*_fastqc/
 results/qc/multiqc_data/
 
-# AMR analysis results (can be large with many samples)
-results/amr/
+# AMR analysis results - Keep summaries, ignore raw outputs
+results/amr/raw_outputs/
+results/amr/**/*.fasta
+results/amr/**/*.fa
 
-# SNP analysis results (VCF files can be large)
-results/snp/
+# SNP analysis results - Keep summaries, ignore large VCF files
+results/snp/vcf/
+results/snp/**/*.vcf
+results/snp/**/*.vcf.gz
+results/snp/**/*.bam
+results/snp/**/*.sam
 
 # --- Machine Learning Models ---
 # Trained model files (can be large, especially DNABERT models)
@@ -184,10 +190,13 @@ saved_models/
 model_weights/
 best_model/
 
-# Feature matrices (can be large with 1000+ samples)
+# Feature matrices - Keep small summaries, ignore large train/test files
 results/features/**/*.npz
 results/features/**/*.npy
-results/features/**/*.pkl
+results/features/**/*_train.csv
+results/features/**/*_test.csv
+results/features/**/*_train.pkl
+results/features/**/*_test.pkl
 results/features/**/train_final.*
 results/features/**/test_final.*
 
@@ -218,11 +227,11 @@ slurm-*.out
 slurm-*.err
 
 # --- Results and Outputs ---
-# Keep structure but ignore large result files
-results/**/*.pdf
-results/**/*.png
-results/**/*.svg
-results/**/*.eps
+# Keep small plots and figures for publications
+# Ignore individual large plots but keep summary figures
+results/qc/**/*.html
+results/qc/**/*.zip
+results/qc/*_fastqc/
 
 # Temporary analysis files
 scratch/
@@ -323,16 +332,35 @@ site/
 !utils/
 !Snakefile
 
-# Small result summaries (JSON/CSV only, no large binary files)
+# Keep all small result summaries and publication-ready outputs
 !results/**/*.json
 !results/**/*.tsv
 !results/**/*.txt
+!results/**/*.md
 
-# Keep small CSV files but exclude large feature matrices
+# Keep small CSV files (< 100MB), small plots, and metrics
 !results/**/*.csv
-results/features/*_train.csv
-results/features/*_test.csv
-results/features/deep_models/**/*.csv
+!results/**/*.png
+!results/**/*.pdf
+!results/**/*.svg
+
+# Keep ensemble and interpretability results (small, important)
+!results/ensemble/
+!results/interpretability/
+!results/batch_correction/
+
+# Explicitly keep small AMR summaries
+!results/amr/**/*.json
+!results/amr/**/*.tsv
+!results/amr/**/*.csv
+!results/amr/**/*.txt
+
+# Keep model performance metrics and summaries
+!results/models/**/*.json
+!results/models/**/*.csv
+!results/models/**/*.txt
+!results/models/**/metrics/
+!results/models/**/plots/
 
 # Small example/test data only
 !data/metadata.csv

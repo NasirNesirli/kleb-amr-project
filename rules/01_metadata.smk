@@ -21,7 +21,7 @@ rule process_metadata:
     log:
         "logs/01_metadata/process_metadata.log"
     script:
-        "../scripts/01_process_metadata.py"
+        "../scripts/01_metadata.py"
 
 # For independent execution
 rule metadata_all:
